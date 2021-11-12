@@ -1,45 +1,177 @@
-'use strict';
+let fs = require("fs");
+///require our websocket library
+let WebSocketServer = require("ws").Server;
 
-const express = require('express');
-const { Server } = require('ws');
+const PORT = process.env.PORT || 8080;
 
-const PORT = process.env.PORT || 3000;
-const INDEX = '/index.html';
+// // For HTTPS checkout
+// let https = require("https");
+// // read ssl certificate
+// var options = {
+//     key: fs.readFileSync("/etc/letsencrypt/live/yourwebsite.com/privkey.pem"),
+//     cert: fs.readFileSync("/etc/letsencrypt/live/yourwebsite.com/cert.pem"),
+//     ca: fs.readFileSync("/etc/letsencrypt/live/yourwebsite.com/chain.pem")
+// };
+// //pass in your credentials to create an https server
+// var httpsServer = https.createServer(options);
+// httpsServer.listen(8080);
 
-const server = express()
-  // .use((req, res) => res.sendFile(INDEX, { root: __dirname }))
-  .listen(PORT, () => console.log(`Listening on ${PORT}`));
 
-const wss = new Server({ server });
-const loggedUsers = {}
+// For HTTP checkout
+let http = require("http");
+//pass in your credentials to create an https server
+var httpServer = http.createServer();
+//httpServer.listen(8080);
 
-wss.on('connection', (ws) => {
-  console.log('Client connected');
-  ws.on('message', function message(data) {
-    console.log('received: %s', data);
+httpServer.listen(PORT, () => console.log(`Listening on ${PORT}`));
 
-    switch (data.type) {
-      case 'login':
-        loggedUsers[data.name] = ws;
-        break;
-      //when somebody wants to call us
-      case 'offer':
-        loggedUsers[data.name].send(data);
-        break;
-      case 'answer':
-        loggedUsers[data.name].send(data);
-        break;
-      //when a remote peer sends an ice candidate to us
-      case 'candidate':
-        loggedUsers[data.name].send(data);
-        break;
-      case 'leave':
-        loggedUsers[data.name].send(data);
-        break;
-      default:
-        break;
-    }
-  });
-  ws.on('close', () => console.log('Client disconnected'));
 
+//creating a websocket server at port 8080
+let wss = new WebSocketServer({ server: httpServer });
+
+
+//all connected to the server users
+var users = {};
+
+//when a user connects to our sever
+wss.on("connection", function(connection) {
+    console.log("User connected");
+
+    //when server gets a message from a connected user
+    connection.on("message", function(message) {
+        var data;
+
+        //accepting only JSON messages
+        try {
+            data = JSON.parse(message);
+        } catch (e) {
+            console.log("Invalid JSON");
+            data = {};
+        }
+
+        //switching type of the user message
+        switch (data.type) {
+            //when a user tries to login
+            case "login":
+                console.log("User logged", data.name);
+
+                //if anyone is logged in with this username then refuse
+                if (users[data.name]) {
+                    sendTo(connection, {
+                        type: "login",
+                        success: false
+                    });
+                } else {
+                    //save user connection on the server
+                    users[data.name] = connection;
+                    connection.name = data.name;
+
+                    sendTo(connection, {
+                        type: "login",
+                        success: true
+                    });
+                }
+
+                break;
+
+            case "offer":
+                //for ex. UserA wants to call UserB
+                console.log("Sending offer to: ", data.name);
+
+                //if UserB exists then send him offer details
+                var conn = users[data.name];
+
+                if (conn != null) {
+                    //setting that UserA connected with UserB
+                    connection.otherName = data.name;
+
+                    sendTo(conn, {
+                        type: "offer",
+                        offer: data.offer,
+                        name: connection.name
+                    });
+                }
+
+                break;
+
+            case "answer":
+                console.log("Sending answer to: ", data.name);
+                //for ex. UserB answers UserA
+                var conn = users[data.name];
+
+                if (conn != null) {
+                    connection.otherName = data.name;
+                    sendTo(conn, {
+                        type: "answer",
+                        answer: data.answer
+                    });
+                }
+
+                break;
+
+            case "candidate":
+                console.log("Sending candidate to:", data.name);
+                var conn = users[data.name];
+
+                if (conn != null) {
+                    sendTo(conn, {
+                        type: "candidate",
+                        candidate: data.candidate
+                    });
+                }
+
+                break;
+
+            case "leave":
+                console.log("Disconnecting from", data.name);
+                var conn = users[data.name];
+                connection.otherName = null;
+
+                //notify the other user so he can disconnect his peer connection
+                if (conn != null) {
+                    sendTo(conn, {
+                        type: "leave"
+                    });
+                }
+                break;
+            default:
+                sendTo(connection, {
+                    type: "error",
+                    message: "Command not found: " + data.type
+                });
+                break;
+        }
+    });
+
+    //when user exits, for example closes a browser window
+    //this may help if we are still in "offer","answer" or "candidate" state
+    connection.on("close", function() {
+        if (connection.name) {
+            delete users[connection.name];
+
+            if (connection.otherName) {
+                console.log("Disconnecting from ", connection.otherName);
+                var conn = users[connection.otherName];
+                conn.otherName = null;
+
+                if (conn != null) {
+                    sendTo(conn, {
+                        type: "leave"
+                    });
+                }
+            }
+        }
+    });
+
+    
+    connection.send(
+        JSON.stringify({
+            type: "joined",
+            success: true
+        })
+    );
 });
+
+function sendTo(connection, message) {
+    connection.send(JSON.stringify(message));
+}
