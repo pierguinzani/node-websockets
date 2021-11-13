@@ -2,29 +2,11 @@ let fs = require("fs");
 ///require our websocket library
 let WebSocketServer = require("ws").Server;
 
-const PORT = process.env.PORT || 8080;
-
-// // For HTTPS checkout
-// let https = require("https");
-// // read ssl certificate
-// var options = {
-//     key: fs.readFileSync("/etc/letsencrypt/live/yourwebsite.com/privkey.pem"),
-//     cert: fs.readFileSync("/etc/letsencrypt/live/yourwebsite.com/cert.pem"),
-//     ca: fs.readFileSync("/etc/letsencrypt/live/yourwebsite.com/chain.pem")
-// };
-// //pass in your credentials to create an https server
-// var httpsServer = https.createServer(options);
-// httpsServer.listen(8080);
-
-
 // For HTTP checkout
 let http = require("http");
 //pass in your credentials to create an https server
 var httpServer = http.createServer();
-//httpServer.listen(8080);
-
-httpServer.listen(PORT, () => console.log(`Listening on ${PORT}`));
-
+httpServer.listen(8080);
 
 //creating a websocket server at port 8080
 let wss = new WebSocketServer({ server: httpServer });
@@ -34,11 +16,11 @@ let wss = new WebSocketServer({ server: httpServer });
 var users = {};
 
 //when a user connects to our sever
-wss.on("connection", function(connection) {
+wss.on("connection", function (connection) {
     console.log("User connected");
 
     //when server gets a message from a connected user
-    connection.on("message", function(message) {
+    connection.on("message", function (message) {
         var data;
 
         //accepting only JSON messages
@@ -134,6 +116,19 @@ wss.on("connection", function(connection) {
                     });
                 }
                 break;
+
+            case "chat":
+                console.log("Sending message to:", data.name);
+                var conn = users[data.name];
+
+                if (conn != null) {
+                    sendTo(conn, {
+                        type: "chat",
+                        message: data.message
+                    });
+                }
+                break;
+
             default:
                 sendTo(connection, {
                     type: "error",
@@ -145,7 +140,7 @@ wss.on("connection", function(connection) {
 
     //when user exits, for example closes a browser window
     //this may help if we are still in "offer","answer" or "candidate" state
-    connection.on("close", function() {
+    connection.on("close", function () {
         if (connection.name) {
             delete users[connection.name];
 
@@ -163,7 +158,7 @@ wss.on("connection", function(connection) {
         }
     });
 
-    
+
     connection.send(
         JSON.stringify({
             type: "joined",
