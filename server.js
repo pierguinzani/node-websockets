@@ -5,8 +5,10 @@ let WebSocketServer = require("ws").Server;
 // For HTTP checkout
 let http = require("http");
 //pass in your credentials to create an https server
+
+const PORT = process.env.PORT || 8080;
 var httpServer = http.createServer();
-httpServer.listen(8080);
+httpServer.listen(PORT, () => console.log(`Listening on ${PORT}`));
 
 //creating a websocket server at port 8080
 let wss = new WebSocketServer({ server: httpServer });
