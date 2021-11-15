@@ -120,7 +120,7 @@ wss.on("connection", function (connection) {
                 break;
 
             case "chat":
-                console.log("Sending message to:", data.name);
+                console.log(`Sending '${data.message}' to: ${data.name}`);
                 var conn = users[data.name];
 
                 if (conn != null) {
