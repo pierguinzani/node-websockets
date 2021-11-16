@@ -57,6 +57,15 @@ wss.on("connection", function (connection) {
                 }
 
                 break;
+            case "logout":
+                if (connection.name) 
+                    delete users[connection.name]; 
+                
+                sendTo(connection, {
+                    type: "logout",
+                    success: true
+                });  
+                break;
 
             case "offer":
                 //for ex. UserA wants to call UserB
