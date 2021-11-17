@@ -58,7 +58,6 @@ wss.on("connection", function (connection) {
 
                 break;
             case "logout":
-                console.log(`fulano logged out`);
                 if (connection.name) 
                     console.log(`${connection.name} logged out`);
                     delete users[connection.name]; 
