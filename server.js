@@ -59,6 +59,7 @@ wss.on("connection", function (connection) {
                 break;
             case "logout":
                 if (connection.name) 
+                    console.log(`${connection.name} logged out`);
                     delete users[connection.name]; 
                 
                 sendTo(connection, {
